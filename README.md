@@ -1,5 +1,7 @@
 > **Binary release** — prebuilt `klayout` and `kplace`
-> executables. Nothing to build: run `./klayout`. Keep both
+> executables for macOS on Apple Silicon (arm64). Other
+> platforms: build from the source repository.
+> Nothing to build here: run `./klayout`. Keep both
 > binaries in the same directory: klayout invokes kplace for
 > auto-placement and re-invokes itself for parallel attempts
 > (install on PATH or run from their directory). kicad-cli
