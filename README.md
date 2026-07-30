@@ -1,6 +1,7 @@
 > **Binary release** — prebuilt `klayout` and `kplace`
 > executables for macOS on Apple Silicon (arm64). Other
-> platforms: build from the source repository.
+> platforms: build from the source repository when
+> authorized by Seagull Work, Inc.
 > Nothing to build here: run `./klayout`. Keep both
 > binaries in the same directory: klayout invokes kplace for
 > auto-placement and re-invokes itself for parallel attempts
