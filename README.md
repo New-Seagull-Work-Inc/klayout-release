@@ -1,7 +1,14 @@
 > **Binary release** — prebuilt `klayout` and `kplace`
-> executables for macOS on Apple Silicon (arm64). Other
-> platforms: build from the source repository when
-> authorized by Seagull Work, Inc.
+> executables for macOS on Apple Silicon (arm64).
+> Links against the system libSystem only; no other dependencies.
+> Other platforms and distributions: build from the source
+> repository when authorized by Seagull Work, Inc.
+> **This package contains executables only — no source
+> code is included or implied.** The `klayout` and `kplace`
+> binaries and this README are the entire distribution:
+> there is no source tree, no Makefile, and nothing here
+> that can be compiled, rebuilt, or modified. The binaries
+> are the only form of the program you receive.
 > Nothing to build here: run `./klayout`. Keep both
 > binaries in the same directory: klayout invokes kplace for
 > auto-placement and re-invokes itself for parallel attempts
@@ -10,7 +17,8 @@
 > DRC acceptance gates, zone-fill verification for the
 > pour stitching, and the fab exports (gerbers, drill,
 > pick-and-place, IPC-D-356).
-> The Building section applies to the source repository only.
+> The build instructions carried by the source repository are
+> omitted from this README: there is nothing here to compile.
 
 # klayout
 
@@ -28,21 +36,6 @@ boards/                          routed/
   amp.kicad_pcb        klayout      amp.kicad_pcb   (+ tracks, vias)
   amp.kicad_pro       ------->     amp.kicad_pro   (copied)
   amp.kicad_sch                    amp.kicad_sch   (copied)
-```
-
-## Building
-
-```sh
-make                     # builds ./klayout (cc, -std=c99)
-make test                # routes the boards in test/ into test/routed/
-make regression-testing  # routes every board under test/regression/
-                         # (each subdir may carry a `flags` file with its
-                         # klayout options: two_res, temp_keychain,
-                         # cannonball, xlator, and regulator) and
-                         # checks baseline + DRC gates
-make release             # packages release/ (klayout + kplace + README)
-                         # and klayout-release.tar.gz
-make clean
 ```
 
 ## Status
@@ -244,6 +237,7 @@ Routes one board. No project/schematic copying is done in this mode.
 | `--stack SPEC` | | Stackup by role, outermost first: `SIG-GND-SIG-GND:AGND-PWR-SIG` sets 6 layers, reserves a plane for every GND/PWR layer. `GND` defaults to net "GND"; `GND:AGND` names another ground; `GND:GND+AGND` groups split grounds (joined only at their ferrite bead) on one reserved layer; bare `PWR` lets the tool pick the biggest power-looking net and print its choice. Outer layers must be SIG. Use `,` separators when net names contain dashes. |
 | `--plane NETS:LAYER` | | Reserve an inner layer for one net (pours a zone; SMD pads get via drops) or a comma-separated group (routed as tracks). Repeatable. Other nets' vias still pass through. Inner layers only, so 1/2-layer boards have no reservation. |
 | `--route-all-layers` | | Ignore `--plane` specs: every layer open to every net. |
+| `--eight-angles-routing` | | Classic octilinear copper: emitted tracks hold to the eight compass directions (90/45-degree turns only). The A* path is octilinear by construction; this keeps the post-search shortcut pulls and stitch spurs on-compass too, instead of the default any-angle straightening. Short pad-attach stubs may still angle as a connectivity last resort. |
 | `--net NAME` | all | Route only the named net |
 | `--grid MM` | 0.1 | Routing grid pitch |
 | `--clearance MM` | project | Copper-to-copper clearance |
@@ -338,6 +332,35 @@ routed board and the run verdict.
   bonded into; and the parent's final gate verdict is decided by the
   SHIPPED board's measurements, never by stale attempt-stage
   readings.
+
+### Learning loops
+
+Below-gates boards no longer just report — they learn, automatically
+(disable with `--no-learn`; the regression suite disables via
+`KLAYOUT_NO_LEARN` so references stay deterministic):
+
+- **Consulted parameter rounds.** A board below its gates triggers up
+  to three consultation rounds (a claude CLI with the banked research
+  and the agent log): one whitelisted knob change per round — seed,
+  place-tries, grid, track/clearance inside the legal band, plane
+  spec — applied and re-run. Across rounds the BEST board wins, never
+  the last: a failed experiment cannot displace an earlier better
+  result. `--agent N` still sets an explicit budget.
+- **Remembered tuning.** When a consulted round verifiably beats the
+  baseline run, the winning knobs are persisted to
+  `klayout-tuning.json` next to the input board — applied on every
+  future run at the lowest precedence (project rules and the command
+  line always win), with the reason recorded.
+- **Code evolution.** When no parameter fixes a board, the
+  consultation may propose an actual code change: a unified diff
+  restricted to the router's algorithm files (never the gates, DRC
+  calls, Makefile or test suite), applied in a git worktree, built,
+  and judged twice — the triggering board must meet its gates AND
+  the full regression suite must pass — before being adopted as its
+  own commit with provenance. Failures feed their evidence back for
+  a revised patch, three attempts per run, transcripts kept in
+  `.evolve/`. Evolution refuses to run on a dirty tree: it builds on
+  committed ground only.
 
 ### Fab capability sweep
 
@@ -989,14 +1012,14 @@ wobble grid searches produce (6× fewer segments on large boards).
 
 ## Verifying results
 
-KiCad's command-line DRC is the ground truth. `make regression-testing`
+KiCad's command-line DRC is the ground truth. The regression suite in the source repository
 closes the loop automatically: after checking each routed board against
 its baseline, it runs `kicad-cli pcb drc --severity-error` on both the
 input and the output, and fails unless the routed board has **0
 unconnected items** and **no violations beyond those already present in
 the input** (pre-existing footprint defects are not the router's fault,
 but anything the router adds is). `kicad-cli` is found on PATH or at the
-standard macOS location; override with `make KICAD_CLI=... regression-testing`.
+standard macOS location; override with the `KICAD_CLI` environment variable.
 
 **Baselines require kicad-cli, and are only comparable against runs that
 had it.** Without kicad-cli the suite still runs and still compares
